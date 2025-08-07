@@ -1,0 +1,381 @@
+// src/parser/grammar.pest
+
+// ======================
+// 基础词法规则
+// ======================
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "//" ~ (!("\n" | "\r") ~ ANY)* }  // 单行注释
+
+// 标识符（首字母非数字）
+identifier = @{ 
+    !(keyword) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*
+}
+
+// 字面量
+integer = @{ ("-")? ~ ASCII_DIGIT+ }
+float = @{ 
+    ("-")? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ |
+    ("-")? ~ ASCII_DIGIT+ ~ ("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+
+}
+string = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+boolean = @{ "true" | "false" }
+null = @{ "null" }
+time_literal = @{ integer ~ "_" ~ ("s" | "ms" | "us" | "ns") }  // 10_s
+
+// 类型相关字面量
+type_path = @{
+    identifier ~ ("::" ~ identifier)* 
+}
+generic_type = @{
+    identifier ~ "<" ~ type_spec ~ ("," ~ type_spec)* ~ ">" 
+}
+
+// ======================
+// 关键字
+// ======================
+keyword = {
+    "import" | "enum" | "struct" | "impl" | "event" |
+    "component" | "describe" | "entity_proto" | "system" |
+    "query" | "where" | "update" | "every" | "watch" |
+    "priority" | "summon" | "world" | "with" | "as" |
+    "match" | "if" | "else" | "while" | "let" | "fn" |
+    "true" | "false" | "or" | "and" | "null" | "Dict" | "Entity"
+}
+
+// ======================
+// 复合类型定义
+// ======================
+enum_def = {
+    "enum" ~ identifier ~ "{" ~
+    (identifier ~ ("," | &"}"))* ~ 
+    "}"
+}
+
+struct_def = {
+    "struct" ~ identifier ~ "{" ~
+    (field_def ~ ("," | &"}")?)* ~ 
+    "}"
+}
+
+field_def = {
+    identifier ~ ":" ~ type_spec
+}
+
+type_spec = {
+    primitive_type | 
+    list_type | 
+    tuple_type | 
+    dict_type | 
+    type_path |
+    generic_type
+}
+
+primitive_type = { "int" | "float" | "str" | "bool" | "Entity" }
+list_type = { "[" ~ type_spec ~ "]" }
+tuple_type = { "(" ~ type_spec ~ ("," ~ type_spec)* ~ ")" }
+dict_type = { "Dict" ~ "<" ~ type_spec ~ "," ~ type_spec ~ ">" }
+
+// ======================
+// ECS 核心结构
+// ======================
+component_def = {
+    "component" ~ identifier ~ "{" ~
+    (field_def ~ ("," | &"}")?)* ~ 
+    "}"
+}
+
+event_def = {
+    "event" ~ identifier ~ "{" ~
+    (field_def ~ ("," | &"}")?)* ~ 
+    "}"
+}
+
+entity_proto_def = {
+    "entity_proto" ~ identifier ~ "{" ~
+    ("with" ~ component_init ~ ("," | &"}")?)* ~ 
+    "}"
+}
+
+component_init = {
+    identifier ~ "(" ~ 
+    (field_init ~ ("," | &")")?)* ~ 
+    ")"
+}
+
+field_init = {
+    identifier ~ ":" ~ expression
+}
+
+// ======================
+// 系统定义
+// ======================
+system_def = {
+    "system" ~ identifier ~ 
+    query_block ~ 
+    update_block? ~ 
+    watch_block*
+}
+
+query_block = {
+    "query" ~ 
+    comp_constraint ~ "as" ~ identifier ~
+    ("where" ~ condition)?
+}
+comp_constraint = {
+    comp_constraint_primitive |
+    comp_constraint_list |
+    comp_constraint_tuple
+}
+
+comp_constraint_primitive = {
+    component_ref ~ ("+" ~ component_ref)*
+}
+comp_constraint_list = {
+    "[" ~ comp_constraint_primitive ~ "]"
+}
+comp_constraint_tuple = {
+    "(" ~ comp_constraint_primitive ~ ")"
+}
+
+component_ref = { 
+    identifier ~ ("::" ~ identifier)? 
+}
+
+condition = { expression }  // 简化处理，实际需更复杂表达式解析
+
+update_block = {
+    "update" ~ "every" ~ time_literal ~ closure
+}
+
+// 修正：移除了watch后的捕获语法糖
+watch_block = {
+    "watch" ~ "{" ~
+    (event_trigger ~ (event_trigger)*)? ~
+    (catch_all_match)? ~
+    "}"
+}
+event_trigger = {
+    priority_attr ~ event_match
+}
+priority_attr = { "@" ~ "priority" ~ "(" ~ integer ~ ")" }
+
+event_match = {
+    identifier ~ "=>" ~ closure
+}
+
+catch_all_match = { "_" ~ "=>" ~ closure }
+
+// ======================
+// 世界定义
+// ======================
+world_def = {
+    "world" ~ identifier ~ "{" ~
+    ("with" ~ system_init ~ ("," | &"}")?)* ~
+    "}"
+}
+
+system_init = {
+    identifier ~ "(" ~
+    (expression ~ ("," | &")")?)* ~
+    ")"
+}
+
+// ======================
+// 表达式层级重构（保留左结合性）
+// ======================
+expression = { logic_or }
+
+// logic_or (左结合)
+op_or = { "or" }
+logic_or = {
+    logic_and ~ logic_or_tail*
+}
+logic_or_tail = {
+    op_or ~ logic_and
+}
+
+// logic_and (左结合)
+op_and = { "and" }
+logic_and = {
+    equality ~ logic_and_tail*
+}
+logic_and_tail = {
+    op_and ~ equality
+}
+
+// equality (禁止链式)
+op_eq = { "==" }
+op_neq = { "!=" }
+equality = {
+    comparison ~ ( (op_eq | op_neq) ~ comparison )?
+}
+
+// comparison (禁止链式)
+op_lt = { "<" }
+op_gt = { ">" }
+op_leq = { "<=" }
+op_geq = { ">=" }
+comparison = {
+    addition ~ ( (op_lt | op_gt | op_leq | op_geq) ~ addition )?
+}
+
+// addition (左结合)
+op_add = { "+" }
+op_subtract = { "-" }
+addition = {
+    multiplication ~ addition_tail*
+}
+addition_tail = {
+    (op_add | op_subtract) ~ multiplication
+}
+
+// multiplication (左结合)
+op_multiply = { "*" }
+op_divide = { "/" }
+op_modulo = { "%" }
+multiplication = {
+    unary ~ multiplication_tail*
+}
+multiplication_tail = {
+    (op_multiply | op_divide | op_modulo) ~ unary
+}
+
+// unary (右结合保持不变)
+op_negate = { "-" }
+op_not = { "!" }
+unary = {
+    (op_negate | op_not)* ~ primary
+}
+
+// primary (保持不变)
+primary = {
+    grouped_expr |
+    tuple_expr |
+    literal |
+    identifier |
+    function_call |
+    match_expr |
+    if_expr |
+    while_expr |
+    closure |
+    block
+}
+
+// 以下规则保持不变...
+grouped_expr = { "(" ~ expression ~ ")" }
+tuple_expr = {
+    "(" ~ ")" |
+    "(" ~ expression ~ "," ~ expression ~ ("," ~ expression)* ~ ")"
+}
+literal = { integer | float | string | time_literal | boolean | null }
+function_call = {
+    identifier ~ "(" ~
+    (expression ~ ("," ~ expression)*)? ~
+    ")"
+}
+match_expr = {
+    "match" ~ expression ~ "{" ~
+    match_arms? ~
+    "}"
+}
+match_arms = {
+    match_arm ~ ("," ~ match_arm)* ~ ","?
+}
+match_arm = {
+    pattern ~ "=>" ~ block
+}
+// pattern matching
+pattern = {
+    "_" |
+    identifier |
+    tuple_pattern |
+    struct_pattern
+}
+
+tuple_pattern = {
+    "(" ~ pattern ~ ("," ~ pattern)* ~ ")"
+}
+
+struct_pattern = {
+    identifier ~ "{" ~ (identifier ~ (":" ~ pattern)? ~ ("," | &"}")?)* ~ "}"
+}
+if_expr = {
+    "if" ~ expression ~ block ~
+    ("else" ~ (if_expr | block))?
+}
+while_expr = {
+    "while" ~ expression ~ block
+}
+block = {
+    "{" ~
+        (statement)* ~
+        expression? ~
+    "}"
+}
+statement = {
+    let_stmt |
+    expression_stmt |
+    return_stmt |
+    summon_stmt
+}
+let_stmt = { "let" ~ identifier ~ ":" ~ type_spec ~ "=" ~ expression ~ ";" }
+expression_stmt = { expression ~ ";" }
+return_stmt = { "return" ~ expression? ~ ";" }
+summon_stmt = { "summon" ~ identifier ~ component_init? ~ ("with" ~ component_init)* ~ ";" }
+closure = {
+    "|" ~ (closure_param ~ ("," ~ closure_param)*)? ~ "|" ~ block
+}
+closure_param = {
+    identifier ~ (":" ~ type_spec)?
+}
+
+// ======================
+// 顶层结构
+// ======================
+import_stmt = {
+    "import" ~
+    identifier ~ ("::" ~ identifier)* ~
+    "as" ~ identifier?
+}
+
+top_level_item = {
+    import_stmt |
+    enum_def |
+    struct_def |
+    impl_block |
+    event_def |
+    component_def |
+    entity_proto_def |
+    system_def |
+    world_def |
+    statement |
+    expression |
+    error
+}
+
+impl_block = {
+    "impl" ~ type_spec ~ "{" ~
+    (function_def)* ~
+    "}"
+}
+
+function_def = {
+    "fn" ~ identifier ~ "(" ~
+    (param ~ ("," ~ param)*)? ~
+    ")" ~ (":" ~ type_spec)? ~ block
+}
+
+param = {
+    identifier ~ ":" ~ type_spec
+}
+
+//错误恢复规则
+error = {
+    ANY* ~ (";" | "{" | "}")
+}
+
+file = { 
+    SOI ~ 
+    (top_level_item ~ (WHITESPACE | COMMENT)*)* ~ 
+    EOI 
+}

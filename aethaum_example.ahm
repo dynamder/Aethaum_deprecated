@@ -1,0 +1,123 @@
+import core::ecs::core_component as core_comp;
+import core::Uuid;
+//全脚本基于ecs架构
+
+enum AetherMagicType {
+    Fire,
+    Ice,
+    Lightning,
+    Poison,
+    Water,
+    Wind,
+    Earth,
+    Dark,
+    Light,
+    Holy,
+    Nature,
+    Physical,
+    None
+}
+struct CustomType { //用struct，enum定义的是作为基本类型的扩充，可以有自己的工具方法
+    a: float,
+    b: int,
+    c: str
+}
+impl CustomType {
+    fn _init() {
+        ...
+    }
+}
+//struct不能derive，它是作为基本类型的，如果需要，说明应当考虑设计为组件
+//在组件上，可以使用derive，仅支持单继承，不能覆盖父组件的任何属性，但可以新增属性，子组件在约束条件中，视为父组件的一种
+
+//事件定义,事件是一种特殊组件，它只能被附加到全局world实体上（事件总线），使用emit发射事件， emit event_name to [system_name] 可以指定哪些系统可以接收
+event AetherMagicLose {
+    amount:  float,
+    entity_id: Entity,
+    kaddle: Dict<Entity, float>, //字典
+    kkandn: (float,float) //元组
+}
+event test {
+    entity_id: Entity
+}
+
+//组件定义
+component AetherMagic {
+    magic_strength: float,
+    magic_type: [AetherMagicType] //一个类型为AetherMagicType的列表
+}
+describe AetherMagic { //描述一个组件，实体...
+    ""//一个可以格式化的字符串
+}
+component Element {
+    element_type: [ElementType]
+}//系统自动实现一个默认的组件描述
+
+//实体原型定义
+entity_proto ElementCreature {
+    with AetherMagic(
+        magic_strength: 0.0,
+        magic_type: [AetherMagicType::None] //列表初始化
+    ),
+    with ...
+}
+//所有带有数据属性的结构，自带一个_init方法，其中自定义扩展类型可以覆盖默认实现，组件不能
+//在类型名后直接加()调用_init方法初始化数据
+
+//系统定义
+@group("AetherMagic") //组名
+system AetherMagicSystem
+query
+    [AetherMagic + Element] as entities //此处的entities作用域局限在系统内部
+    where entities::Element.element_type.contains(ElementType::Fire) { //contains是列表类型的标准库方法
+    //组件在这里成为类似泛型约束，同时还可以使用where进行条件过滤，query整体跟着一个类型，此处表示这个系统接受一个实体列表，列表的元素拥有AetherMagic和Element组件
+    //且Element组件的element_type属性含有ElementType::Fire
+
+    update every 10_s |world| { //接受一个时间间隔，world为捕获的当前世界对象，捕获可以捕获的变量应当比闭包的执行活的更久（借鉴生命周期）
+        //时间间隔必须为常量，在脚本运行前必须确定，可以通过配置文件等设置
+        for item in entities {
+            emit AetherMagicLose(amount: 0.0, entity_id: item.id);
+        }
+    }
+    watch |world| { //监听事件, watch后的捕获是语法糖，表示所有事件都捕获的内容
+        @priority(10) //优先级
+        AetherMagicLose => |event| { //event为捕获的事件对象
+            match event.magic_type {
+                AetherMagicType::Fire => {
+                    //TODO
+                }
+                _ => {
+                    summon  ElementCreature(...)
+                        with AetherMagicType(...) //使用with附加特别的组件
+                        with ...;
+
+                    summon Default //Default 是自动注册的实体原型，不包含任何组件，仅含有一个id
+                        with ...
+                }
+            }
+        }
+        test => |event| { //不显示声明priority，给予默认值
+            //TODO
+            let test: int = 0;
+        }
+        _ => { //表示不论什么事件都执行，这是可选的，不能施加@priority标记
+            //以下仅仅展示控制流语法，不是合理的逻辑
+            if true {
+                // TODO
+            }else {
+                // TODO
+            }
+            while false {
+                // TODO
+            }
+        }
+    }
+    watch {
+        ... //可以有多个watch块，但是 _ 事件匹配一共只能出现一次
+    }
+}
+world AetherRealm { //在世界中使用with注册系统
+    with AetherMagicSystem(...)
+    with ...
+
+}
