@@ -8,51 +8,102 @@ COMMENT = _{ "//" ~ (!("\n" | "\r") ~ ANY)* }  // 单行注释
 
 // 标识符（首字母非数字）
 identifier = @{ 
-    !(keyword) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*
+    !(keyword | reserved_literal | time_unit) ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*
 }
 
 // 字面量
 integer = @{ ("-")? ~ ASCII_DIGIT+ }
+positive_integer = @{ ASCII_DIGIT+ }
 float = @{ 
     ("-")? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ |
     ("-")? ~ ASCII_DIGIT+ ~ ("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+
 }
 string = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
-boolean = @{ "true" | "false" }
+boolean_true = @{ "true" }
+boolean_false = @{ "false" }
+boolean = { boolean_true | boolean_false }
 null = @{ "null" }
-time_literal = @{ integer ~ "_" ~ ("s" | "ms" | "us" | "ns") }  // 10_s
+
+//时间字面量，后续扩展为单位系统
+time_unit_s = @{ "s" }
+time_unit_ms = @{ "ms" }
+time_unit_us = @{ "us" }
+time_unit_ns = @{ "ns" }
+time_unit = { time_unit_s | time_unit_ms | time_unit_us | time_unit_ns }
+time_literal = @{ positive_integer ~ "_" ~ time_unit }  // 10_s
 
 // 类型相关字面量
 type_path = @{
     identifier ~ ("::" ~ identifier)* 
 }
 generic_type = @{
-    identifier ~ "<" ~ type_spec ~ ("," ~ type_spec)* ~ ">" 
+    identifier ~ "<" ~ generic_args ~ ">"
+}
+generic_args = {
+    type_spec ~ ("," ~ type_spec)*
 }
 
 // ======================
-// 关键字
+// 关键字和保留字
 // ======================
+keyword_import = @{ "import" }
+keyword_enum = @{ "enum" }
+keyword_struct = @{ "struct" }
+keyword_impl = @{ "impl" }
+keyword_event = @{ "event" }
+keyword_component = @{ "component" }
+keyword_entity = @{ "entity" }
+keyword_describe = @{ "describe" }
+keyword_entity_proto = @{ "enproto" }
+keyword_system = @{ "system" }
+keyword_query = @{ "query" }
+keyword_where = @{ "where" }
+keyword_update = @{ "update" }
+keyword_every = @{ "every" }
+keyword_watch = @{ "watch" }
+keyword_priority = @{ "priority" }
+keyword_summon = @{ "summon" }
+keyword_world = @{ "world" }
+keyword_with = @{ "with" }
+keyword_as = @{ "as" }
+keyword_match = @{ "match" }
+keyword_if = @{ "if" }
+keyword_else = @{ "else" }
+keyword_while = @{ "while" }
+keyword_let = @{ "let" }
+keyword_fn = @{ "fn" }
+keyword_return = @{ "return" }
+keyword_or = @{ "or" }
+keyword_and = @{ "and" }
+keyword_dict = @{ "Dict" }
+
+keyword_int = @{ "int" }
+keyword_float = @{ "float" }
+keyword_str = @{ "str" }
+keyword_bool = @{ "bool" }
+
 keyword = {
-    "import" | "enum" | "struct" | "impl" | "event" |
-    "component" | "describe" | "entity_proto" | "system" |
-    "query" | "where" | "update" | "every" | "watch" |
-    "priority" | "summon" | "world" | "with" | "as" |
-    "match" | "if" | "else" | "while" | "let" | "fn" |
-    "true" | "false" | "or" | "and" | "null" | "Dict" | "Entity"
+    keyword_import | keyword_enum | keyword_struct | keyword_impl | keyword_event |
+    keyword_component | keyword_describe | keyword_entity_proto | keyword_system |
+    keyword_query | keyword_where | keyword_update | keyword_every | keyword_watch |
+    keyword_priority | keyword_summon | keyword_world | keyword_with | keyword_as |
+    keyword_match | keyword_if | keyword_else | keyword_while | keyword_let | keyword_fn |
+    keyword_return  | keyword_or | keyword_and |
+    keyword_dict | keyword_entity
 }
+reserved_literal = {boolean_true | boolean_false | null}
 
 // ======================
 // 复合类型定义
 // ======================
 enum_def = {
-    "enum" ~ identifier ~ "{" ~
+    keyword_enum ~ identifier ~ "{" ~
     (identifier ~ ("," | &"}"))* ~ 
     "}"
 }
 
 struct_def = {
-    "struct" ~ identifier ~ "{" ~
+    keyword_struct ~ identifier ~ "{" ~
     (field_def ~ ("," | &"}")?)* ~ 
     "}"
 }
@@ -70,28 +121,29 @@ type_spec = {
     generic_type
 }
 
-primitive_type = { "int" | "float" | "str" | "bool" | "Entity" }
+
+primitive_type = { keyword_int | keyword_float | keyword_str | keyword_bool | keyword_entity }
 list_type = { "[" ~ type_spec ~ "]" }
 tuple_type = { "(" ~ type_spec ~ ("," ~ type_spec)* ~ ")" }
-dict_type = { "Dict" ~ "<" ~ type_spec ~ "," ~ type_spec ~ ">" }
+dict_type = { keyword_dict ~ "<" ~ type_spec ~ "," ~ type_spec ~ ">" }
 
 // ======================
 // ECS 核心结构
 // ======================
 component_def = {
-    "component" ~ identifier ~ "{" ~
+    keyword_component ~ identifier ~ "{" ~
     (field_def ~ ("," | &"}")?)* ~ 
     "}"
 }
 
 event_def = {
-    "event" ~ identifier ~ "{" ~
+    keyword_event ~ identifier ~ "{" ~
     (field_def ~ ("," | &"}")?)* ~ 
     "}"
 }
 
 entity_proto_def = {
-    "entity_proto" ~ identifier ~ "{" ~
+    keyword_entity_proto ~ identifier ~ "{" ~
     ("with" ~ component_init ~ ("," | &"}")?)* ~ 
     "}"
 }
@@ -110,14 +162,14 @@ field_init = {
 // 系统定义
 // ======================
 system_def = {
-    "system" ~ identifier ~ 
+    keyword_system ~ identifier ~
     query_block ~ 
     update_block? ~ 
     watch_block*
 }
 
 query_block = {
-    "query" ~ 
+    keyword_query ~
     comp_constraint ~ "as" ~ identifier ~
     ("where" ~ condition)?
 }
@@ -141,23 +193,23 @@ component_ref = {
     identifier ~ ("::" ~ identifier)? 
 }
 
-condition = { expression }  // 简化处理，实际需更复杂表达式解析
+condition = { expression }  // 暂时简化处理，实际需要限定为逻辑表达式
 
 update_block = {
-    "update" ~ "every" ~ time_literal ~ closure
+    keyword_update ~ keyword_every ~ time_literal ~ closure
 }
 
-// 修正：移除了watch后的捕获语法糖
+
 watch_block = {
-    "watch" ~ "{" ~
-    (event_trigger ~ (event_trigger)*)? ~
-    (catch_all_match)? ~
+    keyword_watch ~ "{" ~
+    (event_trigger ~ ("," ~ event_trigger)*)? ~
+    ("," ~ catch_all_match)? ~
     "}"
 }
 event_trigger = {
-    priority_attr ~ event_match
+    priority_attr? ~ event_match
 }
-priority_attr = { "@" ~ "priority" ~ "(" ~ integer ~ ")" }
+priority_attr = { "@" ~ keyword_priority ~ "(" ~ integer ~ ")" }
 
 event_match = {
     identifier ~ "=>" ~ closure
@@ -169,8 +221,8 @@ catch_all_match = { "_" ~ "=>" ~ closure }
 // 世界定义
 // ======================
 world_def = {
-    "world" ~ identifier ~ "{" ~
-    ("with" ~ system_init ~ ("," | &"}")?)* ~
+    keyword_world ~ identifier ~ "{" ~
+    (keyword_with ~ system_init ~ ("," | &"}")?)* ~
     "}"
 }
 
@@ -179,6 +231,16 @@ system_init = {
     (expression ~ ("," | &")")?)* ~
     ")"
 }
+//自定义结构规则（总括）
+custom_def = {
+    enum_def |
+    struct_def |
+    event_def |
+    component_def |
+    entity_proto_def |
+    system_def |
+    world_def
+}
 
 // ======================
 // 表达式层级重构（保留左结合性）
@@ -186,7 +248,7 @@ system_init = {
 expression = { logic_or }
 
 // logic_or (左结合)
-op_or = { "or" }
+op_or = { keyword_or }
 logic_or = {
     logic_and ~ logic_or_tail*
 }
@@ -195,7 +257,7 @@ logic_or_tail = {
 }
 
 // logic_and (左结合)
-op_and = { "and" }
+op_and = { keyword_and }
 logic_and = {
     equality ~ logic_and_tail*
 }
@@ -247,7 +309,7 @@ unary = {
     (op_negate | op_not)* ~ primary
 }
 
-// primary (保持不变)
+// primary
 primary = {
     grouped_expr |
     tuple_expr |
@@ -269,9 +331,10 @@ tuple_expr = {
 }
 literal = { integer | float | string | time_literal | boolean | null }
 function_call = {
-    identifier ~ "(" ~
-    (expression ~ ("," ~ expression)*)? ~
-    ")"
+    identifier ~ "(" ~  argument_list? ~ ")"
+}
+argument_list = {
+    expression ~ ("," ~ expression)*
 }
 match_expr = {
     "match" ~ expression ~ "{" ~
@@ -284,27 +347,28 @@ match_arms = {
 match_arm = {
     pattern ~ "=>" ~ block
 }
-// pattern matching
+// pattern matching, 暂且先将就一下
 pattern = {
-    "_" |
-    identifier |
     tuple_pattern |
-    struct_pattern
+    identifier |
+    literal |
+    "_"
+    // | struct_pattern
 }
 
 tuple_pattern = {
     "(" ~ pattern ~ ("," ~ pattern)* ~ ")"
 }
 
-struct_pattern = {
-    identifier ~ "{" ~ (identifier ~ (":" ~ pattern)? ~ ("," | &"}")?)* ~ "}"
-}
+// struct_pattern = {
+//     identifier ~ "{" ~ (identifier ~ (":" ~ pattern)? ~ ("," | &"}")?)* ~ "}"
+// }
 if_expr = {
-    "if" ~ expression ~ block ~
-    ("else" ~ (if_expr | block))?
+    keyword_if ~ expression ~ block ~
+    (keyword_else ~ (if_expr | block))?
 }
 while_expr = {
-    "while" ~ expression ~ block
+    keyword_while ~ expression ~ block
 }
 block = {
     "{" ~
@@ -316,14 +380,23 @@ statement = {
     let_stmt |
     expression_stmt |
     return_stmt |
-    summon_stmt
+    summon_stmt |
+    import_stmt
 }
-let_stmt = { "let" ~ identifier ~ ":" ~ type_spec ~ "=" ~ expression ~ ";" }
+let_stmt = { keyword_let ~ identifier ~ ":" ~ type_spec ~ ("=" ~ expression)? ~ ";" }
 expression_stmt = { expression ~ ";" }
-return_stmt = { "return" ~ expression? ~ ";" }
-summon_stmt = { "summon" ~ identifier ~ component_init? ~ ("with" ~ component_init)* ~ ";" }
+return_stmt = { keyword_return ~ expression? ~ ";" }
+summon_stmt = { keyword_summon ~ identifier ~ component_init? ~ (keyword_with ~ component_init)* ~ ";" }
+import_stmt = {
+    keyword_import ~
+    identifier ~ ("::" ~ identifier)* ~
+    (keyword_as ~ identifier)? ~ ";"
+}
 closure = {
-    "|" ~ (closure_param ~ ("," ~ closure_param)*)? ~ "|" ~ block
+    "|" ~ closure_param_list? ~ "|" ~ block
+}
+closure_param_list = {
+    closure_param ~ ("," ~ closure_param)*
 }
 closure_param = {
     identifier ~ (":" ~ type_spec)?
@@ -332,37 +405,25 @@ closure_param = {
 // ======================
 // 顶层结构
 // ======================
-import_stmt = {
-    "import" ~
-    identifier ~ ("::" ~ identifier)* ~
-    "as" ~ identifier?
-}
 
-top_level_item = {
-    import_stmt |
-    enum_def |
-    struct_def |
+
+top_level_item = _{
     impl_block |
-    event_def |
-    component_def |
-    entity_proto_def |
-    system_def |
-    world_def |
+    custom_def |
     statement |
-    expression |
     error
 }
 
 impl_block = {
-    "impl" ~ type_spec ~ "{" ~
+    keyword_impl ~ type_spec ~ "{" ~
     (function_def)* ~
     "}"
 }
 
 function_def = {
-    "fn" ~ identifier ~ "(" ~
+    keyword_fn ~ identifier ~ "(" ~
     (param ~ ("," ~ param)*)? ~
-    ")" ~ (":" ~ type_spec)? ~ block
+    ")" ~ ("->" ~ type_spec)? ~ block
 }
 
 param = {

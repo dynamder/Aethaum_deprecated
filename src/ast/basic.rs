@@ -1,16 +1,25 @@
+mod expr;
+mod aether_type;
+mod custom_def;
+mod ecs;
+mod unit_value;
+mod function;
+
+use std::borrow::Cow;
 use pest::Span;
-#[derive(Clone)]
-pub struct OwnedSpan {
-    input: String,
+#[derive(Debug,Clone, Eq, PartialEq)]
+pub struct AetherSpan<'de> {
+    input: Cow<'de, str>,
     start: usize,
     end: usize,
 }
-impl<'i> From<pest::Span<'i>> for OwnedSpan {
-    fn from(span: Span) -> Self {
+impl<'de> From<pest::Span<'de>> for AetherSpan<'de> {
+    fn from(span: Span<'de>) -> Self {
         Self {
-            input: span.as_str().to_string(),
+            input: Cow::Borrowed(span.as_str()),
             start: span.start(),
             end: span.end(),
         }
     }
 }
+
