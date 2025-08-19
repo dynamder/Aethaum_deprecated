@@ -1,10 +1,12 @@
 # Aethaum_deprecated
 
-**重要**：本项目选择了不同的技术路径，原实现（本仓库）已被**归档**
+**重要**：本项目选择了不同的技术路径，原实现（本仓库）已被**归档**，新的仓库如下↓
 
-**Important**: Aethaum project has chosen a different architecture, this repository is **archived**
+**Important**: Aethaum project has chosen a different architecture, this repository is **archived**, new repository as below↓
 
+[Aethaum new repository](https://github.com/dynamder/Aethaum)
 
+------
 
 Aethaum是一个专门用于构建交互式世界观的领域特定语言(DSL)，专为AI角色扮演游戏和桌面角色扮演游戏设计，提供强大的世界观规则支持。
 
