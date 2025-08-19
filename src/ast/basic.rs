@@ -4,6 +4,8 @@ mod custom_def;
 mod ecs;
 mod unit_value;
 mod function;
+mod stmt;
+mod pattern;
 
 use std::borrow::Cow;
 use pest::Span;

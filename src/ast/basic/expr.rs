@@ -1,3 +1,4 @@
+use ordered_float::OrderedFloat;
 use crate::ast::basic::AetherSpan;
 use crate::ast::basic::function::ClosureExpr;
 
@@ -22,15 +23,15 @@ pub enum UnaryOp {
     Neg,
     Not
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Literal {
     Integer(i64),
-    Float(f64),
+    Float(OrderedFloat<f64>),
     String(String),
     Bool(bool),
     Null
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Expr<'de> {
     Identifier(AetherSpan<'de>),
     Literal {

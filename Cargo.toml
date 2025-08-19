@@ -7,6 +7,7 @@ edition = "2024"
 lazy_static = "1.5.0"
 log = "0.4.27"
 miette = { version = "7.6.0", features = ["fancy"] }
+ordered-float = "5.0.0"
 pest = "2.8.1"
 pest_derive = "2.8.1"
 thiserror = "2.0.12"
